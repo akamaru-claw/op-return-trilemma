@@ -278,11 +278,52 @@ const vDec=document.getElementById('vDec'), vSec=document.getElementById('vSec')
 
 function readSliders(){
   dec = +sDec.value; sec = +sSec.value; sca = +sSca.value;
-  vDec.textContent = dec + '%';
-  vSec.textContent = sec + '%';
-  vSca.textContent = sca + '%';
+  vDec.textContent = Math.round(dec) + '%';
+  vSec.textContent = Math.round(sec) + '%';
+  vSca.textContent = Math.round(sca) + '%';
 }
-[sDec,sSec,sSca].forEach(s=>s.addEventListener('input', readSliders));
+
+function normalize(){
+  const total = dec + sec + sca;
+  if(total <= 0){ dec=sec=sca=100/3; }
+  else {
+    dec = (dec/total)*100;
+    sec = (sec/total)*100;
+    sca = (sca/total)*100;
+  }
+  sDec.value = Math.round(dec);
+  sSec.value = Math.round(sec);
+  sSca.value = Math.round(sca);
+  readSliders();
+}
+
+let activeSlider = null;
+function onStart(e){ activeSlider = e.target; }
+function onEnd(){ activeSlider = null; }
+function onInput(e){
+  if(!activeSlider) activeSlider = e.target;
+  if(activeSlider !== e.target) return;
+  const val = +e.target.value;
+  const others = [sDec, sSec, sSca].filter(s => s !== activeSlider);
+  const otherSum = others.reduce((a, s) => a + (+s.value), 0);
+  if(otherSum <= 0){
+    others.forEach(s => s.value = (100 - val) / 2);
+  } else {
+    const factor = Math.max(0, 100 - val) / otherSum;
+    others.forEach(s => s.value = Math.round(Math.max(0, Math.min(100, +s.value * factor))));
+  }
+  // winzige Rundungsfehler am aktiven Slider ausgleichen
+  const rest = 100 - (+others[0].value) - (+others[1].value);
+  activeSlider.value = Math.max(0, Math.min(100, rest));
+  dec = +sDec.value; sec = +sSec.value; sca = +sSca.value;
+  readSliders();
+}
+
+[sDec, sSec, sSca].forEach(s => {
+  s.addEventListener('pointerdown', onStart);
+  s.addEventListener('pointerup', onEnd);
+  s.addEventListener('input', onInput);
+});
 
 // Zustand der Simulation
 let angleX = 0, angleZ = 0;
