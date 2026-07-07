@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bitcoin Trilemma – 3D-Waage</title>
+<style>
+  :root{
+    --bg:#0b0d11; --panel:#161b22; --grid:#272e39; --txt:#e6edf3; --muted:#8b949e;
+    --btc:#f7931a; --btc2:#ffae38; --sec:#3fb950; --sca:#2f81f7; --dec:#a371f7;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    overflow:hidden; height:100%}
+  .wrap{position:absolute;inset:0;display:flex;flex-direction:column}
+  header{flex:0 0 auto;padding:18px 20px 8px;z-index:10}
+  h1{font-size:22px;margin:0 0 4px;font-weight:600}
+  .sub{color:var(--muted);font-size:13px;margin:0}
+  #canvas{flex:1 1 auto;width:100%;min-height:0}
+  .panel{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);
+    width:min(920px,calc(100% - 36px));background:rgba(22,27,34,.92);
+    border:1px solid var(--grid);border-radius:14px;padding:16px 18px 18px;
+    backdrop-filter:blur(6px);z-index:10}
+  .sliders{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .ctrl{display:flex;flex-direction:column;gap:6px}
+  .ctrl label{display:flex;justify-content:space-between;font-size:13px;font-weight:600}
+  .ctrl span{color:var(--muted);font-weight:500}
+  input[type=range]{width:100%;accent-color:var(--btc)}
+  .ctrl.decentralization input{accent-color:var(--dec)}
+  .ctrl.security input{accent-color:var(--sec)}
+  .ctrl.scalability input{accent-color:var(--sca)}
+  .legend{display:flex;justify-content:center;gap:18px;margin-top:12px;font-size:12px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:5px}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .btcdot{background:var(--btc)}
+  .decdot{background:var(--dec)}
+  .secdot{background:var(--sec)}
+  .scadot{background:var(--sca)}
+  .btclabel{position:absolute;top:18px;right:20px;z-index:10;
+    background:rgba(22,27,34,.85);border:1px solid var(--grid);border-radius:10px;
+    padding:10px 14px;font-size:13px;color:var(--btc);font-weight:700}
+  @media(max-width:700px){
+    .sliders{grid-template-columns:1fr}
+    .panel{bottom:10px;padding:12px 14px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Bitcoin Netzwerk-Trilemma</h1>
+    <p class="sub">3D-Waage: Dezentralisierung · Sicherheit · Skalierbarkeit</p>
+  </header>
+  <div class="btclabel">₿ Bitcoin</div>
+  <canvas id="canvas"></canvas>
+
+  <div class="panel">
+    <div class="sliders">
+      <div class="ctrl decentralization">
+        <label>Dezentralisierung <span id="vDec">50%</span></label>
+        <input id="sDec" type="range" min="0" max="100" value="50">
+      </div>
+      <div class="ctrl security">
+        <label>Sicherheit <span id="vSec">50%</span></label>
+        <input id="sSec" type="range" min="0" max="100" value="50">
+      </div>
+      <div class="ctrl scalability">
+        <label>Skalierbarkeit <span id="vSca">50%</span></label>
+        <input id="sSca" type="range" min="0" max="100" value="50">
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot decdot"></span>Dezentralisierung</span>
+      <span><span class="dot secdot"></span>Sicherheit</span>
+      <span><span class="dot scadot"></span>Skalierbarkeit</span>
+      <span><span class="dot btcdot"></span>Waagen-Schwerpunkt</span>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const canvas = document.getElementById('canvas');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0d11);
+scene.fog = new THREE.Fog(0x0b0d11, 15, 45);
+
+const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth/canvas.clientHeight, 0.1, 100);
+camera.position.set(0, 6, 14);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 6;
+controls.maxDistance = 28;
+controls.target.set(0, 0, 0);
+
+// --- Licht ---
+const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+scene.add(ambient);
+const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+dir.position.set(6, 12, 8);
+dir.castShadow = true;
+dir.shadow.mapSize.set(2048, 2048);
+dir.shadow.camera.near = 0.5; dir.shadow.camera.far = 40;
+dir.shadow.camera.left=-10; dir.shadow.camera.right=10;
+dir.shadow.camera.top=10; dir.shadow.camera.bottom=-10;
+scene.add(dir);
+const fill = new THREE.PointLight(0xf7931a, 0.6, 30);
+fill.position.set(-6, 4, -6);
+scene.add(fill);
+
+// --- Materialien ---
+const matFloor = new THREE.MeshStandardMaterial({color:0x13161b, roughness:0.9, metalness:0.1});
+const matPlate = new THREE.MeshStandardMaterial({color:0x1c232d, roughness:0.35, metalness:0.5, side:THREE.DoubleSide});
+const matRim = new THREE.MeshStandardMaterial({color:0x2a3441, roughness:0.3, metalness:0.7});
+const matChain = new THREE.MeshStandardMaterial({color:0x8b949e, roughness:0.4, metalness:0.8});
+const matBtc = new THREE.MeshStandardMaterial({color:0xf7931a, roughness:0.2, metalness:0.6, emissive:0xaa4400, emissiveIntensity:0.2});
+const matDec = new THREE.MeshStandardMaterial({color:0xa371f7, roughness:0.3, metalness:0.4});
+const matSec = new THREE.MeshStandardMaterial({color:0x3fb950, roughness:0.3, metalness:0.4});
+const matSca = new THREE.MeshStandardMaterial({color:0x2f81f7, roughness:0.3, metalness:0.4});
+const matWeight = new THREE.MeshStandardMaterial({color:0xe6edf3, roughness:0.2, metalness:0.85});
+
+// --- Boden ---
+const floor = new THREE.Mesh(new THREE.CircleGeometry(18, 64), matFloor);
+floor.rotation.x = -Math.PI/2;
+floor.position.y = -5.5;
+floor.receiveShadow = true;
+scene.add(floor);
+
+const grid = new THREE.GridHelper(36, 36, 0x272e39, 0x1b2028);
+grid.position.y = -5.48;
+scene.add(grid);
+
+// --- Stativ / Mast oben ---
+const topBar = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 18, 32), matRim);
+topBar.rotation.z = Math.PI/2;
+topBar.position.set(0, 5.2, 0);
+scene.add(topBar);
+const topPole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 11, 32), matRim);
+topPole.position.set(0, 0, -5.5);
+scene.add(topPole);
+const topBall = new THREE.Mesh(new THREE.SphereGeometry(0.35, 32, 32), matBtc);
+topBall.position.set(0, 5.2, 0);
+scene.add(topBall);
+
+// --- Bewegliche Gruppe: das Brett mit Aufhängung ---
+const balance = new THREE.Group();
+scene.add(balance);
+
+// Dreieckiges Brett (gleichseitig, Seitenlänge 6)
+const triShape = new THREE.Shape();
+const r = 3.5;
+for(let i=0;i<3;i++){
+  const a = i*Math.PI*2/3 - Math.PI/2;
+  if(i===0) triShape.moveTo(r*Math.cos(a), r*Math.sin(a));
+  else triShape.lineTo(r*Math.cos(a), r*Math.sin(a));
+}
+triShape.closePath();
+const extrudeSettings = {depth:0.12, bevelEnabled:true, bevelThickness:0.04, bevelSize:0.04, bevelSegments:3};
+const plateGeo = new THREE.ExtrudeGeometry(triShape, extrudeSettings);
+const plate = new THREE.Mesh(plateGeo, matPlate);
+plate.rotation.x = -Math.PI/2;
+plate.position.y = 0;
+plate.castShadow = true; plate.receiveShadow = true;
+balance.add(plate);
+
+// Randring
+const rim = new THREE.Mesh(new THREE.TorusGeometry(r, 0.06, 12, 64), matRim);
+rim.rotation.x = -Math.PI/2;
+balance.add(rim);
+
+// Eckenpositionen (Dezentralisierung oben, Sicherheit unten-links, Skalierbarkeit unten-rechts)
+const cornerAngles = [-Math.PI/2, Math.PI*2/3-Math.PI/2, Math.PI*4/3-Math.PI/2];
+const cornerPos = cornerAngles.map(a => new THREE.Vector3(r*Math.cos(a), 0, r*Math.sin(a)));
+const cornerMats = [matDec, matSec, matSca];
+const cornerLabels = ["Dezentralisierung", "Sicherheit", "Skalierbarkeit"];
+
+// Markierungen an den Ecken
+for(let i=0;i<3;i++){
+  const p = cornerPos[i];
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 24), cornerMats[i]);
+  m.position.copy(p);
+  m.position.y = 0.16;
+  m.castShadow = true;
+  balance.add(m);
+
+  // kleiner Sockel
+  const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 0.12, 24), cornerMats[i]);
+  sock.position.copy(p); sock.position.y = 0.02;
+  balance.add(sock);
+}
+
+// Seile von der oberen Kugel zu den Ecken
+const chains = [];
+for(let i=0;i<3;i++){
+  const chainGroup = new THREE.Group();
+  balance.add(chainGroup);
+  chains.push({group:chainGroup, index:i});
+}
+
+// Gewichte (Kegel / Würfel) hängen unter den Ecken
+const weights = [];
+for(let i=0;i<3;i++){
+  const w = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.42, 0.8, 24), matWeight);
+  w.castShadow = true;
+  const pos = cornerPos[i].clone();
+  pos.y = -1.2;
+  w.position.copy(pos);
+  balance.add(w);
+  weights.push(w);
+}
+
+// Bitcoin-Kugel im Schwerpunkt
+const btcBall = new THREE.Mesh(new THREE.SphereGeometry(0.5, 40, 40), matBtc);
+btcBall.castShadow = true;
+balance.add(btcBall);
+
+// Dreieck innerhalb der Waage als Glow-Linie (Verbindung der Gewichte)
+const triLineMat = new THREE.LineBasicMaterial({color:0xf7931a, transparent:true, opacity:0.5});
+const triLineGeo = new THREE.BufferGeometry().setFromPoints([cornerPos[0], cornerPos[1], cornerPos[2], cornerPos[0]]);
+const triLine = new THREE.Line(triLineGeo, triLineMat);
+triLine.position.y = -0.4;
+balance.add(triLine);
+
+// --- Label-Sprites für die Ecken ---
+function makeLabel(text, color){
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 96;
+  const x = c.getContext('2d');
+  x.fillStyle = color;
+  x.roundRect(10,10,492,76,16);
+  x.fill();
+  x.font = 'bold 42px sans-serif';
+  x.fillStyle = '#ffffff';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.fillText(text, 256, 54);
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.LinearFilter;
+  const mat = new THREE.SpriteMaterial({map:tex, transparent:true, opacity:0.9});
+  const spr = new THREE.Sprite(mat);
+  spr.scale.set(3.2, 0.6, 1);
+  return spr;
+}
+const labelDec = makeLabel("Dezentralisierung", "#a371f7");
+labelDec.position.set(cornerPos[0].x, 1.2, cornerPos[0].z);
+balance.add(labelDec);
+const labelSec = makeLabel("Sicherheit", "#3fb950");
+labelSec.position.set(cornerPos[1].x, 1.2, cornerPos[1].z);
+balance.add(labelSec);
+const labelSca = makeLabel("Skalierbarkeit", "#2f81f7");
+labelSca.position.set(cornerPos[2].x, 1.2, cornerPos[2].z);
+balance.add(labelSca);
+
+// --- Physik / Simulation ---
+let dec=50, sec=50, sca=50;
+const sDec=document.getElementById('sDec'), sSec=document.getElementById('sSec'), sSca=document.getElementById('sSca');
+const vDec=document.getElementById('vDec'), vSec=document.getElementById('vSec'), vSca=document.getElementById('vSca');
+
+function readSliders(){
+  dec = +sDec.value; sec = +sSec.value; sca = +sSca.value;
+  vDec.textContent = dec + '%';
+  vSec.textContent = sec + '%';
+  vSca.textContent = sca + '%';
+}
+[sDec,sSec,sSca].forEach(s=>s.addEventListener('input', readSliders));
+
+// Zustand der Simulation
+let angleX = 0, angleZ = 0;
+let velX = 0, velZ = 0;
+
+function updatePhysics(dt){
+  // Kräfte in den Ecken erzeugen Drehmomente um X- und Z-Achse
+  // Corner 0 (oben): z negativ, x=0 -> beeinflusst vor allem Rotation um X
+  // Corner 1 (links): x negativ, z positiv -> beeinflusst Z und X
+  // Corner 2 (rechts): x positiv, z positiv
+  const total = dec+sec+sca || 1;
+  const d = dec/total, s = sec/total, c = sca/total;
+
+  // Torque um Z-Achse (links/rechts)
+  const torqueZ = (c - s) * 2.8; // rechts zieht runter -> +, links zieht runter -> -
+  // Torque um X-Achse (oben vs unten)
+  const torqueX = (d - (s+c)*0.5) * 2.2;
+
+  // Gewichtshöhen visualisieren
+  weights[0].position.y = -0.6 - d * 1.4;
+  weights[0].scale.setScalar(0.6 + d * 0.7);
+  weights[1].position.y = -0.6 - s * 1.4;
+  weights[1].scale.setScalar(0.6 + s * 0.7);
+  weights[2].position.y = -0.6 - c * 1.4;
+  weights[2].scale.setScalar(0.6 + c * 0.7);
+
+  // Bitcoin-Ball im Massenschwerpunkt (lokale Position auf der Platte)
+  // Schwerpunkt der drei Eckmassen
+  const comX = (cornerPos[0].x*d + cornerPos[1].x*s + cornerPos[2].x*c);
+  const comZ = (cornerPos[0].z*d + cornerPos[1].z*s + cornerPos[2].z*c);
+  btcBall.position.set(comX, -0.35, comZ);
+
+  // Physik: Pendel mit Rückstellkraft
+  const gravity = 9;
+  const damping = 0.92;
+  const dt2 = dt*dt;
+
+  velX += (torqueX - gravity * Math.sin(angleX)) * dt;
+  velZ += (torqueZ - gravity * Math.sin(angleZ)) * dt;
+  velX *= damping;
+  velZ *= damping;
+  angleX += velX * dt;
+  angleZ += velZ * dt;
+
+  // Begrenzung, damit es nicht durchdreht
+  angleX = THREE.MathUtils.clamp(angleX, -0.65, 0.65);
+  angleZ = THREE.MathUtils.clamp(angleZ, -0.65, 0.65);
+
+  // Brett drehen
+  balance.rotation.x = angleX;
+  balance.rotation.z = angleZ;
+  // leichte Höhenverschiebung durch Neigung simulieren
+  balance.position.y = -0.25 * (Math.abs(angleX) + Math.abs(angleZ));
+}
+
+function updateChains(){
+  // Obere Aufhängepunkt in Weltkoordinaten ist (0,5.2,0)
+  // Kette muss von (0,5.2,0) zur jeweiligen Ecke des gedrehten Bretts gehen.
+  for(let i=0;i<3;i++){
+    const cg = chains[i].group;
+    cg.clear();
+    const start = new THREE.Vector3(0, 5.2, 0);
+    const p = cornerPos[i].clone();
+    p.applyEuler(balance.rotation);
+    p.add(balance.position);
+    const len = start.distanceTo(p);
+    const mid = start.clone().add(p).multiplyScalar(0.5);
+    const chainGeo = new THREE.CylinderGeometry(0.035, 0.035, len, 8);
+    const chain = new THREE.Mesh(chainGeo, matChain);
+    chain.position.copy(mid);
+    chain.lookAt(p);
+    chain.rotateX(Math.PI/2);
+    chain.castShadow = true;
+    cg.add(chain);
+  }
+}
+
+// --- Loop ---
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  updatePhysics(dt);
+  updateChains();
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+// --- Resize ---
+function onResize(){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+}
+window.addEventListener('resize', onResize);
+readSliders();
+</script>
+</body>
+</html>
