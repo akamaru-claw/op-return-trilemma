@@ -24,8 +24,12 @@
     backdrop-filter:blur(6px);z-index:10}
   .sliders{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
   .ctrl{display:flex;flex-direction:column;gap:6px}
-  .ctrl label{display:flex;justify-content:space-between;font-size:13px;font-weight:600}
+  .ctrl label{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600}
   .ctrl span{color:var(--muted);font-weight:500}
+  .lock{flex:0 0 auto;margin-left:8px;background:transparent;border:1px solid var(--grid);border-radius:6px;
+    color:var(--muted);font-size:13px;padding:2px 7px;cursor:pointer;transition:.15s}
+  .lock:hover{border-color:var(--txt);color:var(--txt)}
+  .lock.on{background:var(--btc);border-color:var(--btc);color:#1a1205}
   input[type=range]{width:100%;accent-color:var(--btc)}
   .ctrl.decentralization input{accent-color:var(--dec)}
   .ctrl.security input{accent-color:var(--sec)}
@@ -43,6 +47,7 @@
   @media(max-width:700px){
     .sliders{grid-template-columns:1fr}
     .panel{bottom:10px;padding:12px 14px}
+    .lock{font-size:12px;padding:2px 5px}
   }
 </style>
 </head>
@@ -58,15 +63,15 @@
   <div class="panel">
     <div class="sliders">
       <div class="ctrl decentralization">
-        <label>Dezentralisierung <span id="vDec">50%</span></label>
+        <label>Dezentralisierung <span id="vDec">50%</span><button class="lock" id="lDec" data-key="dec" title="sperren">🔓</button></label>
         <input id="sDec" type="range" min="0" max="100" value="50">
       </div>
       <div class="ctrl security">
-        <label>Sicherheit <span id="vSec">50%</span></label>
+        <label>Sicherheit <span id="vSec">50%</span><button class="lock" id="lSec" data-key="sec" title="sperren">🔓</button></label>
         <input id="sSec" type="range" min="0" max="100" value="50">
       </div>
       <div class="ctrl scalability">
-        <label>Skalierbarkeit <span id="vSca">50%</span></label>
+        <label>Skalierbarkeit <span id="vSca">50%</span><button class="lock" id="lSca" data-key="sca" title="sperren">🔓</button></label>
         <input id="sSca" type="range" min="0" max="100" value="50">
       </div>
     </div>
@@ -297,24 +302,70 @@ function normalize(){
   readSliders();
 }
 
+const locks = {dec:false, sec:false, sca:false};
+const sliderByKey = {dec:sDec, sec:sSec, sca:sSca};
+const lockBtnByKey = {dec:document.getElementById('lDec'), sec:document.getElementById('lSec'), sca:document.getElementById('lSca')};
+
+function updateLockUI(){
+  for(const k of ['dec','sec','sca']){
+    const b = lockBtnByKey[k];
+    b.textContent = locks[k] ? '🔒' : '🔓';
+    b.classList.toggle('on', locks[k]);
+    sliderByKey[k].disabled = locks[k];
+  }
+}
+for(const k of ['dec','sec','sca']){
+  lockBtnByKey[k].addEventListener('click', (e)=>{
+    e.preventDefault();
+    locks[k] = !locks[k];
+    updateLockUI();
+  });
+}
+
 let activeSlider = null;
 function onStart(e){ activeSlider = e.target; }
 function onEnd(){ activeSlider = null; }
 function onInput(e){
   if(!activeSlider) activeSlider = e.target;
   if(activeSlider !== e.target) return;
-  const val = +e.target.value;
-  const others = [sDec, sSec, sSca].filter(s => s !== activeSlider);
-  const otherSum = others.reduce((a, s) => a + (+s.value), 0);
-  if(otherSum <= 0){
-    others.forEach(s => s.value = (100 - val) / 2);
-  } else {
-    const factor = Math.max(0, 100 - val) / otherSum;
-    others.forEach(s => s.value = Math.round(Math.max(0, Math.min(100, +s.value * factor))));
+
+  const key = activeSlider === sDec ? 'dec' : activeSlider === sSec ? 'sec' : 'sca';
+  const val = Math.max(0, Math.min(100, +activeSlider.value));
+  const keys = ['dec','sec','sca'];
+  const otherKeys = keys.filter(k => k !== key);
+
+  const locked = otherKeys.filter(k => locks[k]);
+  const unlocked = otherKeys.filter(k => !locks[k]);
+
+  const lockedSum = locked.reduce((a,k)=>a + (+sliderByKey[k].value), 0);
+  let available = 100 - val - lockedSum;
+
+  if(available < 0){
+    available = 0;
+    activeSlider.value = 100 - lockedSum;
   }
-  // winzige Rundungsfehler am aktiven Slider ausgleichen
-  const rest = 100 - (+others[0].value) - (+others[1].value);
-  activeSlider.value = Math.max(0, Math.min(100, rest));
+
+  const unlockedSum = unlocked.reduce((a,k)=>a + (+sliderByKey[k].value), 0);
+  if(unlocked.length === 1){
+    sliderByKey[unlocked[0]].value = Math.max(0, Math.min(100, available));
+  } else if(unlocked.length === 2){
+    if(unlockedSum <= 0){
+      sliderByKey[unlocked[0]].value = available/2;
+      sliderByKey[unlocked[1]].value = available/2;
+    } else {
+      const factor = available / unlockedSum;
+      sliderByKey[unlocked[0]].value = Math.max(0, Math.min(100, +sliderByKey[unlocked[0]].value * factor));
+      sliderByKey[unlocked[1]].value = Math.max(0, Math.min(100, +sliderByKey[unlocked[1]].value * factor));
+    }
+  }
+
+  let rest = 100;
+  for(const k of keys) rest -= Math.round(+sliderByKey[k].value);
+  if(unlocked.length > 0){
+    const target = unlocked[0];
+    sliderByKey[target].value = Math.max(0, Math.min(100, +sliderByKey[target].value + rest));
+  }
+
   dec = +sDec.value; sec = +sSec.value; sca = +sSca.value;
   readSliders();
 }
@@ -324,6 +375,7 @@ function onInput(e){
   s.addEventListener('pointerup', onEnd);
   s.addEventListener('input', onInput);
 });
+updateLockUI();
 
 // Zustand der Simulation
 let angleX = 0, angleZ = 0;
